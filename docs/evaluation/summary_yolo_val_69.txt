@@ -1,0 +1,7 @@
+Total samples: 69
+Flow success rate: 1.0000
+YOLO detection rate: 1.0000
+Image-level defect accuracy: 1.0000
+Human review trigger rate: 0.3043
+RAG hit rate: 1.0000
+CSV path: /extra/caochunhong/gm/pcb_multi_agent/outputs/eval_langgraph_yolo_val/yolo_val_20260618_083918/eval_results.csv

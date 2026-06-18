@@ -1,0 +1,14 @@
+torch
+transformers
+peft
+qwen-vl-utils
+ultralytics
+streamlit
+elasticsearch
+sentence-transformers
+langgraph
+mcp[cli]
+pillow
+numpy
+pandas
+typing_extensions
