@@ -21,7 +21,7 @@
 - 设计 YOLO/VLM 一致性判断机制，当检测模型和视觉语言模型结果冲突时自动标记人工复核。
 - 使用 Streamlit 实现可视化诊断界面，支持整图上传、检测框展示、局部 crop 展示、RAG 维修建议展示和 Markdown 报告下载。
 
-![PCB-MultiAgent Demo](./docs/assets/demo.png)
+![Streamlit 诊断界面](./docs/assets/streamlit-demo.png)
 
 ## 2. 系统架构
 
