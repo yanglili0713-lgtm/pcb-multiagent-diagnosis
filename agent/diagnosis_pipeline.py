@@ -1,32 +1,56 @@
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from rag.knowledge_search import pcb_knowledge_search
 
 
-def build_retrieval_query(vlm_result: Dict[str, Any]) -> str:
-    defect_type = vlm_result.get("defect_type", "未知缺陷")
-    description = vlm_result.get("description", "")
-    return f"PCB图像疑似存在{defect_type}缺陷。{description}。请给出检测方法、风险分析和维修建议。"
+def build_retrieval_query(visual_diagnosis: Dict[str, Any]) -> str:
+    """Build a RAG query from structured visual diagnosis instead of only class name."""
+    defect_type = visual_diagnosis.get("final_type", "未知")
+    subtype = visual_diagnosis.get("subtype", "")
+    evidence = visual_diagnosis.get("visual_evidence", "")
+    repairability = visual_diagnosis.get("repairability", "未知")
+    direct_suggestion = visual_diagnosis.get("direct_repair_suggestion", "")
+
+    return (
+        f"PCB 图像疑似存在{defect_type}缺陷。"
+        f"子类型/形态：{subtype}。"
+        f"视觉证据：{evidence}。"
+        f"可返修性判断：{repairability}。"
+        f"初步维修建议：{direct_suggestion}。"
+        "请给出标准检测方法、风险分析、维修建议、复测方法和预防措施。"
+    )
 
 
 def generate_diagnosis_report(
-    vlm_result: Dict[str, Any],
+    visual_diagnosis: Dict[str, Any],
     rag_results: List[Dict[str, Any]],
 ) -> str:
-    defect_type = vlm_result.get("defect_type", "未知")
-    confidence = vlm_result.get("confidence", "中")
-    description = vlm_result.get("description", "图像中存在疑似缺陷区域。")
+    defect_type = visual_diagnosis.get("final_type", "未知")
+    subtype = visual_diagnosis.get("subtype", "未知")
+    confirmed = visual_diagnosis.get("defect_confirmed", "uncertain")
+    evidence = visual_diagnosis.get("visual_evidence", "图像证据不足。")
+    repairability = visual_diagnosis.get("repairability", "未知")
+    direct_suggestion = visual_diagnosis.get("direct_repair_suggestion", "建议人工复核。")
+    risk_level = visual_diagnosis.get("risk_level", "未知")
+    need_review = visual_diagnosis.get("need_human_review", True)
+    review_reason = visual_diagnosis.get("review_reason", "建议结合 AOI 局部放大图和电测结果复核。")
 
-    lines = []
-
-    lines.append("# PCB 多模态故障诊断报告")
+    lines: List[str] = []
+    lines.append("# PCB 多模态视觉诊断与维修知识报告")
     lines.append("")
-    lines.append("## 1. 图像诊断结果")
-    lines.append(f"- 疑似缺陷类型：{defect_type}")
-    lines.append(f"- 诊断置信度：{confidence}")
-    lines.append(f"- 图像观察说明：{description}")
+    lines.append("## 1. Qwen 结构化视觉诊断")
+    lines.append(f"- 缺陷确认状态：{confirmed}")
+    lines.append(f"- 最终缺陷类型：{defect_type}")
+    lines.append(f"- 细分形态/子类型：{subtype}")
+    lines.append(f"- 视觉证据：{evidence}")
+    lines.append(f"- 可返修性：{repairability}")
+    lines.append(f"- 直接维修建议：{direct_suggestion}")
+    lines.append(f"- 风险等级：{risk_level}")
+    lines.append(f"- 是否需要人工复核：{'是' if need_review else '否'}")
+    if need_review:
+        lines.append(f"- 复核原因：{review_reason}")
     lines.append("")
-    lines.append("注意：该结果由视觉模型自动生成，建议结合 AOI 检测框、局部放大图和人工复核进一步确认。")
+    lines.append("注意：视觉诊断只能说明图像形态，是否已经造成电气失效仍需结合通断测试、绝缘测试或功能测试确认。")
     lines.append("")
 
     lines.append("## 2. 知识库检索结果")
@@ -39,57 +63,47 @@ def generate_diagnosis_report(
             lines.append(f"- 缺陷类型：{item.get('defect_type')}")
             lines.append(f"- 标题：{item.get('title')}")
             lines.append(f"- 风险等级：{item.get('severity')}")
+            if item.get("visual_features"):
+                lines.append(f"- 标准视觉特征：{item.get('visual_features')}")
+            if item.get("risk"):
+                lines.append(f"- 风险说明：{item.get('risk')}")
+            if item.get("detection_methods"):
+                lines.append(f"- 检测方法：{item.get('detection_methods')}")
             lines.append(f"- 维修建议：{item.get('repair_suggestions')}")
+            if item.get("prevention"):
+                lines.append(f"- 预防措施：{item.get('prevention')}")
             lines.append("")
 
-    lines.append("## 3. 综合风险分析")
+    lines.append("## 3. 综合处理建议")
     if rag_results:
-        high_risk_items = [x for x in rag_results if x.get("severity") == "高"]
-        if high_risk_items:
-            lines.append(f"该缺陷在知识库中存在高风险记录，可能影响电气连接、绝缘可靠性或长期稳定性。")
-        else:
-            lines.append("该缺陷风险等级为中低风险或可变风险，但仍需结合实际线路位置判断。")
+        top = rag_results[0]
+        lines.append(f"- 优先参考知识条目：{top.get('title')}")
+        lines.append(f"- 建议措施：{top.get('repair_suggestions')}")
     else:
-        lines.append("由于缺少知识库结果，无法给出可靠风险分析。")
-    lines.append("")
-
-    lines.append("## 4. 建议处理措施")
-    if rag_results:
-        first = rag_results[0]
-        lines.append(f"优先参考知识条目：{first.get('title')}")
-        lines.append(f"建议措施：{first.get('repair_suggestions')}")
-        lines.append("")
-        lines.append("进一步建议：")
-        lines.append("- 使用显微镜或 AOI 局部放大确认缺陷位置。")
-        lines.append("- 使用万用表、绝缘电阻测试或通断测试验证电气影响。")
-        lines.append("- 维修后重新进行外观检查和电气测试。")
-    else:
-        lines.append("- 建议人工复核图像。")
-        lines.append("- 补充更多缺陷描述后重新检索知识库。")
+        lines.append("- 建议人工复核图像并补充电气测试结果后重新检索知识库。")
+    lines.append("- 使用显微镜或 AOI 局部放大确认缺陷边界。")
+    lines.append("- 维修后重新进行外观检查和电气测试。")
 
     return "\n".join(lines)
 
 
 def run_diagnosis_pipeline(
-    vlm_result: Dict[str, Any],
+    visual_diagnosis: Dict[str, Any],
     top_k: int = 3,
 ) -> Dict[str, Any]:
-    defect_type: Optional[str] = vlm_result.get("defect_type")
-    query = build_retrieval_query(vlm_result)
-
+    defect_type: Optional[str] = visual_diagnosis.get("final_type")
+    query = build_retrieval_query(visual_diagnosis)
     rag_results = pcb_knowledge_search(
         query=query,
         defect_type=defect_type,
         top_k=top_k,
     )
-
     report = generate_diagnosis_report(
-        vlm_result=vlm_result,
+        visual_diagnosis=visual_diagnosis,
         rag_results=rag_results,
     )
-
     return {
-        "vlm_result": vlm_result,
+        "visual_diagnosis": visual_diagnosis,
         "retrieval_query": query,
         "rag_results": rag_results,
         "report": report,
